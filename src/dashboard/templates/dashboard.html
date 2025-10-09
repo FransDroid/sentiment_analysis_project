@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Social Media Sentiment Analysis Dashboard</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+</head>
+<body>
+    <nav class="navbar navbar-dark bg-dark">
+        <div class="container-fluid">
+            <span class="navbar-brand mb-0 h1">
+                <i class="fas fa-chart-line"></i>
+                Sentiment Analysis Dashboard
+            </span>
+            <div class="d-flex">
+                <span class="text-light me-3" id="last-update">Last updated: --</span>
+                <button class="btn btn-outline-light btn-sm" onclick="refreshData()">
+                    <i class="fas fa-sync-alt"></i> Refresh
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        <!-- Overview Stats Row -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card stats-card">
+                    <div class="card-body text-center">
+                        <h5 class="card-title text-success">Positive</h5>
+                        <h2 class="card-text" id="positive-percent">--%</h2>
+                        <small class="text-muted" id="positive-count">-- posts</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stats-card">
+                    <div class="card-body text-center">
+                        <h5 class="card-title text-warning">Neutral</h5>
+                        <h2 class="card-text" id="neutral-percent">--%</h2>
+                        <small class="text-muted" id="neutral-count">-- posts</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stats-card">
+                    <div class="card-body text-center">
+                        <h5 class="card-title text-danger">Negative</h5>
+                        <h2 class="card-text" id="negative-percent">--%</h2>
+                        <small class="text-muted" id="negative-count">-- posts</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stats-card">
+                    <div class="card-body text-center">
+                        <h5 class="card-title text-info">Total Posts</h5>
+                        <h2 class="card-text" id="total-posts">--</h2>
+                        <small class="text-muted">Last 24 hours</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="row mb-4">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Sentiment Trends Over Time</h5>
+                        <div class="float-end">
+                            <select class="form-select form-select-sm" id="trend-period" onchange="updateTrends()">
+                                <option value="1">Last 24 Hours</option>
+                                <option value="3">Last 3 Days</option>
+                                <option value="7" selected>Last 7 Days</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="trend-chart"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Sentiment Distribution</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="pie-chart"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Platform Breakdown Row -->
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h6 class="mb-0">Twitter Sentiment</h6>
+                    </div>
+                    <div class="card-body" id="twitter-stats">
+                        <div class="loading">Loading...</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header bg-warning text-dark">
+                        <h6 class="mb-0">Reddit Sentiment</h6>
+                    </div>
+                    <div class="card-body" id="reddit-stats">
+                        <div class="loading">Loading...</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header bg-danger text-white">
+                        <h6 class="mb-0">YouTube Sentiment</h6>
+                    </div>
+                    <div class="card-body" id="youtube-stats">
+                        <div class="loading">Loading...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Posts Row -->
+        <div class="row">
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header bg-success text-white">
+                        <h6 class="mb-0">Top Positive Posts</h6>
+                    </div>
+                    <div class="card-body" id="positive-posts">
+                        <div class="loading">Loading...</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header bg-warning text-dark">
+                        <h6 class="mb-0">Top Neutral Posts</h6>
+                    </div>
+                    <div class="card-body" id="neutral-posts">
+                        <div class="loading">Loading...</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header bg-danger text-white">
+                        <h6 class="mb-0">Top Negative Posts</h6>
+                    </div>
+                    <div class="card-body" id="negative-posts">
+                        <div class="loading">Loading...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://kit.fontawesome.com/your-fontawesome-kit.js"></script>
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>
