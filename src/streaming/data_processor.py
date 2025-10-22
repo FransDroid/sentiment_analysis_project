@@ -72,22 +72,35 @@ class DataProcessor:
             return []
 
     def aggregate_sentiment_stats(self, sentiment_results: List[Dict]) -> Dict:
-        """Aggregate sentiment statistics using Python (fallback from Spark due to compatibility issues)"""
+        """Aggregate sentiment statistics using Python"""
         try:
             if not sentiment_results:
+                return {'positive': 0, 'neutral': 0, 'negative': 0, 'total': 0}
+
+            # Ensure we're working with a list
+            if not isinstance(sentiment_results, list):
+                logging.error(f"Invalid input type: expected list, got {type(sentiment_results)}")
                 return {'positive': 0, 'neutral': 0, 'negative': 0, 'total': 0}
 
             # Count sentiments using simple Python
             counts = {'positive': 0, 'neutral': 0, 'negative': 0}
 
             for result in sentiment_results:
+                if not isinstance(result, dict):
+                    logging.warning(f"Skipping non-dict item: {type(result)}")
+                    continue
+
                 sentiment_info = result.get('sentiment', {})
+                if not isinstance(sentiment_info, dict):
+                    logging.warning(f"Sentiment info is not a dict: {type(sentiment_info)}")
+                    continue
+
                 label = sentiment_info.get('label', 'neutral')
                 if label in counts:
                     counts[label] += 1
 
-            # Calculate percentages
-            total = sum(counts.values())
+            # Calculate percentages - explicitly convert to list to avoid dict_values issues
+            total = sum([counts['positive'], counts['neutral'], counts['negative']])
             stats = {
                 'positive': round(counts['positive'] / total * 100, 2) if total > 0 else 0,
                 'neutral': round(counts['neutral'] / total * 100, 2) if total > 0 else 0,

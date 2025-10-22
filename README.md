@@ -36,6 +36,8 @@ Social Media APIs → Spark Streaming → Sentiment Analysis (TensorFlow) → Mo
    ```bash
    git clone <repository>
    cd sentiment_analysis_project
+   source .venv/bin/activate
+   pip install --upgrade pip
    pip install -r requirements.txt
    ```
 
