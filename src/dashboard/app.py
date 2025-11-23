@@ -5,6 +5,7 @@ import logging
 import json
 
 from src.database.mongodb_client import MongoDBClient
+from src.streaming.real_time_pipeline import RealTimePipeline
 from src.utils.error_handler import parse_date_param, validate_date_range
 from config.settings import Config
 
@@ -328,6 +329,13 @@ def update_configured_keywords():
             'success': False,
             'error': str(e)
         }), 500
+
+
+@app.route("/api/pipeline/run_once", methods=['POST'])
+def run_once():
+    RealTimePipeline().run_single_cycle_once()
+    return {"status": "scheduled"}
+
 
 @app.errorhandler(404)
 def not_found(error):

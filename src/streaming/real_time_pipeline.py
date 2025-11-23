@@ -14,7 +14,7 @@ from .data_processor import DataProcessor
 from config.settings import Config
 
 class RealTimePipeline:
-    def __init__(self):
+    def __init__(self, keywords_source: callable = None):
         self.twitter_collector = TwitterCollector()
         self.reddit_collector = RedditCollector()
         self.youtube_collector = YouTubeCollector()
@@ -23,8 +23,17 @@ class RealTimePipeline:
         self.data_processor = DataProcessor()
 
         self.is_running = False
+        self.keywords_source = keywords_source
         self.keywords = Config.DEFAULT_KEYWORDS
         self.update_interval = Config.UPDATE_INTERVAL
+
+        # Thread lock for safe single-cycle execution
+        self._lock = threading.Lock()
+
+    def get_keywords(self):
+        if self.keywords_source:
+            return self.keywords_source()
+        return self.db_client.get_active_keywords()
 
     def collect_data_from_all_sources(self) -> List[Dict]:
         """Collect data from all social media sources in parallel"""
@@ -151,6 +160,15 @@ class RealTimePipeline:
         except Exception as e:
             logging.error(f"Error in pipeline cycle: {e}")
 
+    def run_single_cycle_once(self):
+        """Thread-safe way to run a single cycle ONCE on demand."""
+        with self._lock:
+            try:
+                self.run_single_cycle()
+                return {"status": "success"}
+            except Exception as e:
+                return {"status": "error", "message": str(e)}
+
     def start_streaming(self):
         """Start the real-time streaming pipeline"""
         self.is_running = True
@@ -159,6 +177,9 @@ class RealTimePipeline:
         while self.is_running:
             try:
                 cycle_start = time.time()
+
+                # Update keywords from source
+                self.keywords = self.get_keywords()
 
                 # Run one cycle
                 self.run_single_cycle()
