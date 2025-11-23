@@ -1,8 +1,9 @@
 import logging
 import traceback
 from functools import wraps
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import time
+from datetime import datetime, timezone
 
 class ErrorHandler:
     def __init__(self):
@@ -122,3 +123,71 @@ def with_error_handling(error_handler: ErrorHandler, operation_name: str):
 
 # Global error handler instance
 error_handler = ErrorHandler()
+
+def parse_date_param(date_string: str, param_name: str = 'date') -> datetime:
+    """
+    Parse ISO 8601 date string to timezone-aware datetime object.
+    
+    Args:
+        date_string: ISO 8601 formatted date string (e.g., '2025-11-23T10:00:00Z' or '2025-11-23')
+        param_name: Name of the parameter (for error messages)
+    
+    Returns:
+        Timezone-aware datetime object in UTC
+    
+    Raises:
+        ValueError: If date string is invalid or in the future
+    """
+    if not date_string:
+        raise ValueError(f"{param_name} cannot be empty")
+    
+    try:
+        # Try parsing as ISO 8601
+        if 'T' in date_string:
+            # Full datetime string
+            parsed_date = datetime.fromisoformat(date_string.replace('Z', '+00:00'))
+        else:
+            # Date only - assume start of day UTC
+            parsed_date = datetime.fromisoformat(date_string).replace(tzinfo=timezone.utc)
+        
+        # Ensure timezone awareness
+        if parsed_date.tzinfo is None:
+            parsed_date = parsed_date.replace(tzinfo=timezone.utc)
+        else:
+            # Convert to UTC
+            parsed_date = parsed_date.astimezone(timezone.utc)
+        
+        # Validate not in the future
+        now_utc = datetime.now(timezone.utc)
+        if parsed_date > now_utc:
+            raise ValueError(f"{param_name} cannot be in the future")
+        
+        return parsed_date
+    
+    except ValueError as e:
+        if 'Invalid isoformat string' in str(e) or 'does not match format' in str(e):
+            raise ValueError(
+                f"Invalid {param_name} format. Expected ISO 8601 format "
+                f"(e.g., '2025-11-23' or '2025-11-23T10:00:00Z')"
+            )
+        raise
+
+def validate_date_range(start_date: Optional[datetime], end_date: Optional[datetime], max_days: int = 365) -> None:
+    """
+    Validate that date range is logical and within limits.
+    
+    Args:
+        start_date: Start datetime (optional)
+        end_date: End datetime (optional)
+        max_days: Maximum allowed range in days
+    
+    Raises:
+        ValueError: If date range is invalid
+    """
+    if start_date and end_date:
+        if end_date < start_date:
+            raise ValueError("end_date must be greater than or equal to start_date")
+        
+        range_days = (end_date - start_date).days
+        if range_days > max_days:
+            raise ValueError(f"Date range cannot exceed {max_days} days (requested: {range_days} days)")

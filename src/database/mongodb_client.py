@@ -2,7 +2,7 @@ from pymongo import MongoClient, ASCENDING, DESCENDING
 from pymongo.collection import Collection
 from pymongo.database import Database
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Optional
 from config.settings import Config
 
@@ -68,16 +68,34 @@ class MongoDBClient:
             logging.error(f"Error inserting sentiment results: {e}")
         return []
 
-    def get_recent_posts(self, platform: Optional[str] = None, hours: int = 24, limit: int = 1000) -> List[Dict]:
-        """Get recent posts from the database"""
+    def get_recent_posts(self, platform: Optional[str] = None, hours: int = 24, limit: int = 1000,
+                         start_dt: Optional[datetime] = None, end_dt: Optional[datetime] = None) -> List[Dict]:
+        """Get recent posts from the database
+        
+        Args:
+            platform: Filter by platform (optional)
+            hours: Number of hours to look back (used if start_dt/end_dt not provided)
+            limit: Maximum number of posts to return
+            start_dt: Start datetime for filtering (optional, overrides hours)
+            end_dt: End datetime for filtering (optional, overrides hours)
+        """
         try:
             query = {}
             if platform:
                 query['platform'] = platform
 
-            # Get posts from last N hours
-            since = datetime.now() - timedelta(hours=hours)
-            query['created_at'] = {'$gte': since}
+            # Use explicit date range if provided, otherwise use hours
+            if start_dt or end_dt:
+                date_filter = {}
+                if start_dt:
+                    date_filter['$gte'] = start_dt
+                if end_dt:
+                    date_filter['$lt'] = end_dt
+                query['created_at'] = date_filter
+            else:
+                # Fallback to hours-based filtering
+                since = datetime.now(timezone.utc) - timedelta(hours=hours)
+                query['created_at'] = {'$gte': since}
 
             posts = list(self.db.raw_posts.find(query)
                         .sort('created_at', DESCENDING)
@@ -88,16 +106,33 @@ class MongoDBClient:
             logging.error(f"Error getting recent posts: {e}")
             return []
 
-    def get_sentiment_summary(self, platform: Optional[str] = None, hours: int = 24) -> Dict:
-        """Get sentiment summary statistics"""
+    def get_sentiment_summary(self, platform: Optional[str] = None, hours: int = 24,
+                              start_dt: Optional[datetime] = None, end_dt: Optional[datetime] = None) -> Dict:
+        """Get sentiment summary statistics
+        
+        Args:
+            platform: Filter by platform (optional)
+            hours: Number of hours to look back (used if start_dt/end_dt not provided)
+            start_dt: Start datetime for filtering (optional, overrides hours)
+            end_dt: End datetime for filtering (optional, overrides hours)
+        """
         try:
             match_stage = {}
             if platform:
                 match_stage['platform'] = platform
 
-            # Get sentiment data from last N hours
-            since = datetime.now() - timedelta(hours=hours)
-            match_stage['processed_at'] = {'$gte': since}
+            # Use explicit date range if provided, otherwise use hours
+            if start_dt or end_dt:
+                date_filter = {}
+                if start_dt:
+                    date_filter['$gte'] = start_dt
+                if end_dt:
+                    date_filter['$lt'] = end_dt
+                match_stage['processed_at'] = date_filter
+            else:
+                # Fallback to hours-based filtering
+                since = datetime.now(timezone.utc) - timedelta(hours=hours)
+                match_stage['processed_at'] = {'$gte': since}
 
             pipeline = [
                 {'$match': match_stage},
@@ -124,16 +159,33 @@ class MongoDBClient:
             logging.error(f"Error getting sentiment summary: {e}")
             return {'positive': 0, 'neutral': 0, 'negative': 0, 'total': 0}
 
-    def get_trend_data(self, platform: Optional[str] = None, days: int = 7) -> List[Dict]:
-        """Get sentiment trend data over time"""
+    def get_trend_data(self, platform: Optional[str] = None, days: int = 7,
+                       start_dt: Optional[datetime] = None, end_dt: Optional[datetime] = None) -> List[Dict]:
+        """Get sentiment trend data over time
+        
+        Args:
+            platform: Filter by platform (optional)
+            days: Number of days to look back (used if start_dt/end_dt not provided)
+            start_dt: Start datetime for filtering (optional, overrides days)
+            end_dt: End datetime for filtering (optional, overrides days)
+        """
         try:
             match_stage = {}
             if platform:
                 match_stage['platform'] = platform
 
-            # Get data from last N days
-            since = datetime.now() - timedelta(days=days)
-            match_stage['processed_at'] = {'$gte': since}
+            # Use explicit date range if provided, otherwise use days
+            if start_dt or end_dt:
+                date_filter = {}
+                if start_dt:
+                    date_filter['$gte'] = start_dt
+                if end_dt:
+                    date_filter['$lt'] = end_dt
+                match_stage['processed_at'] = date_filter
+            else:
+                # Fallback to days-based filtering
+                since = datetime.now(timezone.utc) - timedelta(days=days)
+                match_stage['processed_at'] = {'$gte': since}
 
             pipeline = [
                 {'$match': match_stage},
@@ -155,12 +207,30 @@ class MongoDBClient:
             logging.error(f"Error getting trend data: {e}")
             return []
 
-    def get_top_posts(self, sentiment: str, platform: Optional[str] = None, limit: int = 10) -> List[Dict]:
-        """Get top posts by sentiment"""
+    def get_top_posts(self, sentiment: str, platform: Optional[str] = None, limit: int = 10,
+                      start_dt: Optional[datetime] = None, end_dt: Optional[datetime] = None) -> List[Dict]:
+        """Get top posts by sentiment
+        
+        Args:
+            sentiment: Sentiment label to filter by ('positive', 'negative', 'neutral')
+            platform: Filter by platform (optional)
+            limit: Maximum number of posts to return
+            start_dt: Start datetime for filtering (optional)
+            end_dt: End datetime for filtering (optional)
+        """
         try:
             query = {'sentiment.label': sentiment}
             if platform:
                 query['platform'] = platform
+
+            # Add date range filtering if provided
+            if start_dt or end_dt:
+                date_filter = {}
+                if start_dt:
+                    date_filter['$gte'] = start_dt
+                if end_dt:
+                    date_filter['$lt'] = end_dt
+                query['processed_at'] = date_filter
 
             posts = list(self.db.sentiment_results.find(query)
                         .sort([('sentiment.confidence', DESCENDING), ('processed_at', DESCENDING)])

@@ -32,5 +32,9 @@ class Config:
     UPDATE_INTERVAL = 30  # seconds
     MAX_POSTS_PER_DAY = 1000
 
+    # Date/Time Settings
+    TIMEZONE = 'UTC'
+    MAX_DATE_RANGE_DAYS = 365  # Maximum date range for queries
+
     # Keywords to track
     DEFAULT_KEYWORDS = ['python', 'AI', 'machine learning']
