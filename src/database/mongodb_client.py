@@ -40,12 +40,20 @@ class MongoDBClient:
 
             logging.info("Database indexes created successfully")
 
-            self.db.settings.insert_one({
-                "_id": 'keywords',
-                "active": ["python", "AI", "machine learning"],
-                "updated_at": datetime.now(),
-                "history": []
-            })
+            # Initialize keywords settings document (only if it doesn't exist)
+            self.db.settings.update_one(
+                {'_id': 'keywords'},
+                {
+                    '$setOnInsert': {
+                        'active': ["python", "AI", "machine learning"],
+                        'history': []
+                    },
+                    '$set': {
+                        'updated_at': datetime.now()
+                    }
+                },
+                upsert=True
+            )
             logging.info("Initialized keywords settings document")
 
         except Exception as e:
