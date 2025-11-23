@@ -176,6 +176,52 @@ def get_overview_stats():
             'error': str(e)
         }), 500
 
+@app.route('/api/config/keywords')
+def get_configured_keywords():
+    """Get configured keywords for monitoring"""
+    try:
+        keywords = db_client.get_active_keywords()
+        return jsonify({
+            'success': True,
+            'data': keywords
+        })
+    except Exception as e:
+        logging.error(f"Error getting configured keywords: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/config/keywords', methods=['POST'])
+def update_configured_keywords():
+    """Update configured keywords for monitoring"""
+    try:
+        data = request.get_json()
+        keywords = data.get('keywords', [])
+        keywords = list(set([kw.strip() for kw in keywords if kw.strip()]))
+
+        if len(keywords) == 0:
+            raise ValueError("Keyword list cannot be empty")
+
+        for keyword in keywords:
+            if not keyword.isalpha():
+                raise ValueError("Keywords must be alphabetic strings only")
+
+        if len(keywords) > 50:
+            raise ValueError("Cannot have more than 50 keywords")
+
+        db_client.set_active_keywords(keywords)
+        return jsonify({
+            'success': True,
+            'message': 'Keywords updated successfully'
+        })
+    except Exception as e:
+        logging.error(f"Error updating configured keywords: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 @app.errorhandler(404)
 def not_found(error):
     return jsonify({

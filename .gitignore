@@ -148,4 +148,4 @@ logs/
 .env
 
 # Example env files
-.env.example
+#.env.example

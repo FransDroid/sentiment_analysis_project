@@ -39,6 +39,23 @@ class MongoDBClient:
             self.db.sentiment_results.create_index([("processed_at", DESCENDING)])
 
             logging.info("Database indexes created successfully")
+
+            # Initialize keywords settings document (only if it doesn't exist)
+            self.db.settings.update_one(
+                {'_id': 'keywords'},
+                {
+                    '$setOnInsert': {
+                        'active': ["python", "AI", "machine learning"],
+                        'history': []
+                    },
+                    '$set': {
+                        'updated_at': datetime.now()
+                    }
+                },
+                upsert=True
+            )
+            logging.info("Initialized keywords settings document")
+
         except Exception as e:
             logging.error(f"Error creating indexes: {e}")
 
@@ -193,3 +210,39 @@ class MongoDBClient:
         if self.client:
             self.client.close()
             logging.info("MongoDB connection closed")
+
+    def get_active_keywords(self) -> List[str]:
+        """Get active keywords for data collection"""
+        try:
+            doc = self.db.settings.find_one({'_id': 'keywords'})
+            if doc and 'active' in doc:
+                return doc['active']
+            return []
+        except Exception as e:
+            logging.error(f"Error getting active keywords: {e}")
+            return []
+
+    def set_active_keywords(self, keywords: List[str], user: Optional[str] = None) -> None:
+        """Set active keywords for data collection"""
+        try:
+            update_doc = {
+                'active': keywords,
+                'updated_at': datetime.now()
+            }
+            self.db.settings.update_one({'_id': 'keywords'}, {'$set': update_doc})
+            logging.info("Active keywords updated successfully")
+        except Exception as e:
+            logging.error(f"Error setting active keywords: {e}")
+
+    def append_keywords_history(self, old, new, user) -> None:
+        """Append to keywords history log"""
+        try:
+            history_entry = {
+                'value': old,
+                'changed_by': user,
+                'changed_at': datetime.now(),
+            }
+            self.db.settings.update_one({'_id': 'keywords'}, {'$push': {'history': history_entry}})
+            logging.info("Appended to keywords history successfully")
+        except Exception as e:
+            logging.error(f"Error appending keywords history: {e}")
