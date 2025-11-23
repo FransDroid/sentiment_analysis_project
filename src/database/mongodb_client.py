@@ -203,12 +203,12 @@ class MongoDBClient:
             self.client.close()
             logging.info("MongoDB connection closed")
 
-    def get_active_keywords(self, limit: int = 100) -> List[str]:
+    def get_active_keywords(self) -> List[str]:
         """Get active keywords for data collection"""
         try:
             doc = self.db.settings.find_one({'_id': 'keywords'})
             if doc and 'active' in doc:
-                return doc['active'][:limit]
+                return doc['active']
             return []
         except Exception as e:
             logging.error(f"Error getting active keywords: {e}")
