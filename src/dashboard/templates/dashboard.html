@@ -25,6 +25,47 @@
     </nav>
 
     <div class="container-fluid mt-4">
+        <button class="btn btn-primary m-3" data-bs-toggle="modal" data-bs-target="#keywordsModal" onclick="fetchKeywords()">
+            Manage Keywords
+        </button>
+
+        <!-- Keywords Modal -->
+        <div class="modal fade" id="keywordsModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+
+                    <div class="modal-header">
+                        <h5 class="modal-title">Manage Active Keywords</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+
+                    <div class="modal-body">
+                        <!-- Keywords List -->
+                        <ul id="keywordsList" class="list-group mb-3">
+                            <!-- keywords inserted dynamically -->
+                        </ul>
+
+                        <!-- Add keyword -->
+                        <div class="input-group">
+                            <input type="text" id="newKeywordInput" class="form-control" placeholder="Add keyword...">
+                            <button class="btn btn-success" id="addKeywordBtn">Add</button>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <!-- Run fetch now -->
+                        <button class="btn btn-warning" id="runOnceBtn">
+                            Run fetch now
+                        </button>
+                        <!-- Save Changes -->
+                        <button class="btn btn-primary" id="saveKeywordsBtn">
+                            Save / Apply
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Date Range Filter Row -->
         <div class="row mb-4">
             <div class="col-md-12">
@@ -190,6 +231,16 @@
                 </div>
             </div>
         </div>
+
+        <div class="position-fixed top-0 end-0 p-3" style="z-index: 9999">
+            <div id="notificationToast" class="toast align-items-center text-white bg-success border-0" role="alert">
+                <div class="d-flex">
+                    <div class="toast-body" id="toastMessage">Success</div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>

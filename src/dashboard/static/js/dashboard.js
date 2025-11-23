@@ -176,6 +176,17 @@ async function fetchOverviewStats() {
     }
 }
 
+// --- Load keywords from server ---
+async function fetchKeywords() {
+    try {
+        const res = await fetch("/api/config/keywords");
+        const data = await res.json();
+        const keywords = data.data || [];
+        renderKeywords(keywords);
+    } catch (err) {
+        showToast("Failed to load keywords", true);
+    }
+}
 function updateOverviewStats(data) {
     document.getElementById('positive-percent').textContent = `${data.positive.toFixed(1)}%`;
     document.getElementById('neutral-percent').textContent = `${data.neutral.toFixed(1)}%`;
@@ -597,4 +608,36 @@ function showWarning(message) {
             alert.parentNode.removeChild(alert);
         }
     }, 4000);
+}
+
+// --- Toast Utility ---
+function showToast(message, isError = false) {
+    const toastEl = document.getElementById("notificationToast");
+    const toastBody = document.getElementById("toastMessage");
+
+    toastBody.textContent = message;
+
+    // Change color depending on error
+    toastEl.classList.remove("bg-success", "bg-danger");
+    toastEl.classList.add(isError ? "bg-danger" : "bg-success");
+
+    new bootstrap.Toast(toastEl).show();
+}
+
+// --- Render keywords into list ---
+function renderKeywords(keywords) {
+    listEl = document.getElementById("keywordsList");
+    listEl.innerHTML = "";
+
+    keywords.forEach((kw, index) => {
+        const li = document.createElement("li");
+        li.className = "list-group-item d-flex justify-content-between align-items-center";
+        li.innerHTML = `
+            <span>${kw}</span>
+            <button class="btn btn-sm btn-outline-danger" data-index="${index}">
+                <i class="bi bi-trash"></i> Remove
+            </button>
+        `;
+        listEl.appendChild(li);
+    });
 }
