@@ -25,6 +25,33 @@
     </nav>
 
     <div class="container-fluid mt-4">
+        <!-- Date Range Filter Row -->
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col-md-4">
+                                <label for="start-date" class="form-label mb-1"><strong>Start Date</strong></label>
+                                <input type="datetime-local" class="form-control" id="start-date" onchange="applyDateFilter()">
+                            </div>
+                            <div class="col-md-4">
+                                <label for="end-date" class="form-label mb-1"><strong>End Date</strong></label>
+                                <input type="datetime-local" class="form-control" id="end-date" onchange="applyDateFilter()">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label mb-1"><strong>Status</strong></label>
+                                <div>
+                                    <small class="text-muted d-block" id="date-range-info">Using default range</small>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm mt-1" onclick="clearDateFilter()">Clear Filter</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Overview Stats Row -->
         <div class="row mb-4">
             <div class="col-md-3">

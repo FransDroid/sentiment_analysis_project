@@ -2,6 +2,10 @@
 
 let trendChart, pieChart;
 let updateInterval;
+let dateFilter = {
+    startDate: null,
+    endDate: null
+};
 
 // Initialize dashboard when page loads
 document.addEventListener('DOMContentLoaded', function() {
@@ -96,12 +100,20 @@ function loadInitialData() {
 
 async function fetchSentimentSummary() {
     try {
-        const response = await fetch('/api/sentiment/summary');
+        let url = '/api/sentiment/summary';
+        const params = buildDateParams();
+        if (params) {
+            url += '?' + params;
+        }
+        
+        const response = await fetch(url);
         const result = await response.json();
 
         if (result.success) {
             updateOverviewStats(result.data);
             updatePieChart(result.data);
+        } else if (result.error) {
+            showError(result.error);
         }
     } catch (error) {
         console.error('Error fetching sentiment summary:', error);
@@ -111,11 +123,19 @@ async function fetchSentimentSummary() {
 async function fetchSentimentTrends() {
     try {
         const days = document.getElementById('trend-period').value;
-        const response = await fetch(`/api/sentiment/trends?days=${days}`);
+        let url = `/api/sentiment/trends?days=${days}`;
+        const dateParams = buildDateParams();
+        if (dateParams) {
+            url += '&' + dateParams;
+        }
+        
+        const response = await fetch(url);
         const result = await response.json();
 
         if (result.success) {
             updateTrendChart(result.data);
+        } else if (result.error) {
+            showError(result.error);
         }
     } catch (error) {
         console.error('Error fetching sentiment trends:', error);
@@ -124,11 +144,19 @@ async function fetchSentimentTrends() {
 
 async function fetchTopPosts(sentiment) {
     try {
-        const response = await fetch(`/api/posts/top?sentiment=${sentiment}&limit=5`);
+        let url = `/api/posts/top?sentiment=${sentiment}&limit=5`;
+        const dateParams = buildDateParams();
+        if (dateParams) {
+            url += '&' + dateParams;
+        }
+        
+        const response = await fetch(url);
         const result = await response.json();
 
         if (result.success) {
             updateTopPosts(sentiment, result.data);
+        } else if (result.error) {
+            showError(result.error);
         }
     } catch (error) {
         console.error(`Error fetching ${sentiment} posts:`, error);
@@ -456,3 +484,117 @@ window.addEventListener('resize', function() {
         fetchSentimentTrends();
     }, 100);
 });
+
+// Date Filter Functions
+function buildDateParams() {
+    const params = new URLSearchParams();
+    
+    if (dateFilter.startDate) {
+        params.append('start_date', dateFilter.startDate);
+    }
+    if (dateFilter.endDate) {
+        params.append('end_date', dateFilter.endDate);
+    }
+    
+    return params.toString();
+}
+
+function applyDateFilter() {
+    const startInput = document.getElementById('start-date');
+    const endInput = document.getElementById('end-date');
+    
+    const startValue = startInput.value;
+    const endValue = endInput.value;
+    
+    // Validate dates
+    if (startValue && endValue) {
+        const startDate = new Date(startValue);
+        const endDate = new Date(endValue);
+        
+        if (endDate < startDate) {
+            showError('End date must be after start date');
+            return;
+        }
+        
+        // Check for max range (365 days)
+        const daysDiff = (endDate - startDate) / (1000 * 60 * 60 * 24);
+        if (daysDiff > 365) {
+            showError('Date range cannot exceed 365 days');
+            return;
+        }
+        
+        // Warn if range is large
+        if (daysDiff > 90) {
+            showWarning('Large date range may take longer to load');
+        }
+    }
+    
+    // Convert to ISO format if values exist
+    if (startValue) {
+        dateFilter.startDate = new Date(startValue).toISOString();
+    } else {
+        dateFilter.startDate = null;
+    }
+    
+    if (endValue) {
+        dateFilter.endDate = new Date(endValue).toISOString();
+    } else {
+        dateFilter.endDate = null;
+    }
+    
+    // Update info text
+    updateDateRangeInfo();
+    
+    // Reload data
+    loadInitialData();
+}
+
+function clearDateFilter() {
+    document.getElementById('start-date').value = '';
+    document.getElementById('end-date').value = '';
+    dateFilter.startDate = null;
+    dateFilter.endDate = null;
+    
+    updateDateRangeInfo();
+    loadInitialData();
+}
+
+function updateDateRangeInfo() {
+    const infoElement = document.getElementById('date-range-info');
+    
+    if (dateFilter.startDate || dateFilter.endDate) {
+        let text = 'Custom range: ';
+        if (dateFilter.startDate) {
+            text += new Date(dateFilter.startDate).toLocaleDateString();
+        } else {
+            text += 'Beginning';
+        }
+        text += ' to ';
+        if (dateFilter.endDate) {
+            text += new Date(dateFilter.endDate).toLocaleDateString();
+        } else {
+            text += 'Now';
+        }
+        infoElement.textContent = text;
+        infoElement.className = 'text-primary';
+    } else {
+        infoElement.textContent = 'Using default range';
+        infoElement.className = 'text-muted';
+    }
+}
+
+function showWarning(message) {
+    const alert = document.createElement('div');
+    alert.className = 'alert alert-warning alert-dismissible fade show update-indicator';
+    alert.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    document.body.appendChild(alert);
+
+    setTimeout(() => {
+        if (alert.parentNode) {
+            alert.parentNode.removeChild(alert);
+        }
+    }, 4000);
+}
