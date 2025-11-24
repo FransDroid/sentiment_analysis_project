@@ -45,24 +45,27 @@ class SentimentAnalysisApp:
             error_handler.handle_processing_error("dashboard_startup", e)
 
     def run_pipeline_only(self):
-        """Run only the data collection pipeline"""
-        self.logger.info("Starting data collection pipeline...")
-
+        """Run data collection pipeline in manual mode (awaits API triggers)"""
+        self.logger.warning("Pipeline mode is deprecated. Use '--mode dashboard' and trigger collection via the dashboard 'Run fetch now' button.")
+        self.logger.info("Starting in manual collection mode - data collection only happens when triggered via API...")
+        
+        # Keep process running but don't auto-collect
         try:
-            self.pipeline = RealTimePipeline()
-            self.pipeline.start_streaming()
+            self.logger.info("Manual collection mode active. Waiting for API triggers...")
+            self.logger.info("Press Ctrl+C to stop")
+            
+            # Keep alive without doing anything
+            import time
+            while True:
+                time.sleep(60)
+                
         except KeyboardInterrupt:
             self.logger.info("Pipeline stopped by user")
-        except Exception as e:
-            self.logger.error(f"Error running pipeline: {e}")
-            error_handler.handle_processing_error("pipeline_startup", e)
-        finally:
-            if self.pipeline:
-                self.pipeline.stop_streaming()
 
     def run_full_system(self):
-        """Run both pipeline and dashboard"""
-        self.logger.info("Starting full sentiment analysis system...")
+        """Run dashboard with on-demand data collection"""
+        self.logger.info("Starting sentiment analysis system in manual collection mode...")
+        self.logger.info("Data collection will only happen when you click 'Run fetch now' in the dashboard")
         self.is_running = True
 
         try:
@@ -73,20 +76,13 @@ class SentimentAnalysisApp:
             )
             self.dashboard_thread.start()
             self.logger.info(f"Dashboard started on http://localhost:{Config.FLASK_PORT}")
-
-            # Start pipeline in separate thread
-            self.pipeline_thread = threading.Thread(
-                target=self._run_pipeline_thread,
-                daemon=True
-            )
-            self.pipeline_thread.start()
-            self.logger.info("Data collection pipeline started")
+            self.logger.info("Use the 'Run fetch now' button in the dashboard to collect data")
 
             # Set up signal handlers for graceful shutdown
             signal.signal(signal.SIGINT, self._signal_handler)
             signal.signal(signal.SIGTERM, self._signal_handler)
 
-            # Main monitoring loop
+            # Main monitoring loop (no auto pipeline)
             self._monitoring_loop()
 
         except Exception as e:

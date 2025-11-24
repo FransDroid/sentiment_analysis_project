@@ -4,6 +4,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Config:
+    BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+    DEFAULT_TRANSFORMER_DIR = os.path.join(BASE_DIR, 'src', 'model', 'trained_sentiment_model')
+
     # Social Media APIs
     TWITTER_BEARER_TOKEN = os.getenv('TWITTER_BEARER_TOKEN')
     TWITTER_API_KEY = os.getenv('TWITTER_API_KEY')
@@ -38,3 +41,6 @@ class Config:
 
     # Keywords to track
     DEFAULT_KEYWORDS = ['python', 'AI', 'machine learning']
+
+    # Sentiment Model
+    TRANSFORMER_MODEL_DIR = os.getenv('TRANSFORMER_MODEL_DIR', DEFAULT_TRANSFORMER_DIR)

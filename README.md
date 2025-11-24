@@ -12,7 +12,8 @@ This system processes 1,000+ social media posts per day, classifies sentiment wi
 - **Sentiment Analysis**: Machine learning-powered sentiment classification
 - **Interactive Dashboard**: Live visualizations with D3.js
 - **Scalable Architecture**: Apache Spark for big data processing
-- **Multiple Deployment Modes**: Dashboard-only, pipeline-only, or full system
+- **Multiple Deployment Modes**: Dashboard with on-demand or continuous data collection
+- **Keyword Management**: Add/remove tracked keywords and trigger collection from the UI
 
 ## 🏗️ System Architecture
 
@@ -49,18 +50,28 @@ Social Media APIs → Spark Streaming → Sentiment Analysis (TensorFlow) → Mo
 
 3. **Run the system**:
    ```bash
-   # Full system (pipeline + dashboard)
+   # Recommended: Dashboard with on-demand data collection
+   python main.py --mode dashboard
+   # or
    python main.py --mode full
 
-   # Dashboard only
-   python main.py --mode dashboard
-
-   # Data pipeline only
+   # Legacy pipeline mode (deprecated - use dashboard instead)
    python main.py --mode pipeline
    ```
 
 4. **Access dashboard**:
    Open http://localhost:5000 in your browser
+
+5. **Run Analysis**:
+   - Click the **"Run Analysis"** button
+   - Enter keywords you want to track (e.g., "AI, Python, Climate Change")
+   - Select time range:
+     - **60 seconds** (perfect for live demos! 🎬)
+     - 24 hours, 3 days, 7 days, or 30 days
+   - Click **"Start Analysis"**
+   - Watch the progress in real-time
+   - Dashboard automatically refreshes when complete
+   - Optional: Use the **"Manage Keywords"** button to edit the default keyword list anytime
 
 ## 📋 Configuration
 
@@ -87,11 +98,68 @@ MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/sentiment_analys
 
 ### Keywords Configuration
 
-Modify `config/settings.py` to change tracked keywords:
+**Dashboard UI (Recommended)**: Use the "Manage Keywords" button in the dashboard to add, remove, and update tracked keywords in real-time. Changes are saved to MongoDB and picked up by the pipeline automatically.
+
+**Config File (Fallback)**: Modify `config/settings.py` to set default keywords:
 
 ```python
 DEFAULT_KEYWORDS = ['python', 'AI', 'machine learning']
 ```
+
+Note: Keywords configured via the dashboard take precedence over config file settings.
+
+## 📊 Data Collection Workflow
+
+The system uses an **intuitive modal-based workflow** for running analyses:
+
+### New Workflow (Recommended)
+
+1. **Start the dashboard**: `python main.py --mode dashboard`
+2. **Click "Run Analysis"** - A modal dialog opens
+3. **Configure your analysis**:
+   - Enter keywords (comma-separated, e.g., "AI, Python, Climate")
+   - Select time range:
+     - **60 seconds (Demo)** - Perfect for live presentations! 🎬
+     - 24 hours, 3 days, 7 days, or 30 days
+4. **Start Analysis** - Modal closes, progress bar appears
+5. **Watch real-time progress**:
+   - "Initializing analysis..."
+   - "Collecting data from social media platforms..."
+   - "Analysis complete! Dashboard updated."
+6. **Dashboard auto-refreshes** with new keyword cards and charts
+
+Need to adjust your defaults first? Click **"Manage Keywords"** to update the saved list that auto-fills each new analysis.
+
+### Benefits of This Workflow
+
+- ✅ **Intuitive**: Clear modal interface for configuration
+- ✅ **Flexible**: Specify different keywords for each run
+- ✅ **Transparent**: Real-time progress feedback
+- ✅ **Efficient**: Only collect data when you need it
+- ✅ **Visual**: Keyword cards show sentiment breakdown per topic
+- ✅ **Demo-ready**: 60-second option for live presentations
+
+### 🎬 Pro Tips for Live Presentations
+
+**Before Your Demo:**
+1. Test your API credentials work
+2. Pre-select trending keywords (check Twitter/Reddit for hot topics)
+3. Keep browser window at 100% zoom for best visibility
+4. Have the dashboard open at http://localhost:5000
+
+**During Your Demo:**
+1. Use **60 seconds** time range for instant results
+2. Choose 2-3 high-activity keywords (e.g., "AI", "Python", "Tech")
+3. Show the modal → Start analysis → Watch progress in real-time
+4. While waiting (~30-45 seconds), explain the architecture
+5. Dashboard auto-refreshes when complete - wow factor! ✨
+
+**Backup Plan:**
+- If live collection is slow, use **24 hours** range with pre-existing data
+- Have a rehearsal run 5 minutes before presenting
+
+**For continuous collection** (advanced use):
+You can modify the `/api/pipeline/run_once` endpoint to run on a schedule using a task scheduler (cron, Windows Task Scheduler, or Celery).
 
 ## 🔧 API Setup Guide
 
@@ -124,16 +192,36 @@ DEFAULT_KEYWORDS = ['python', 'AI', 'machine learning']
 
 The web dashboard provides:
 
+- **Keyword Cards**: Individual sentiment analytics for each tracked keyword
 - **Real-time sentiment overview**: Positive, neutral, negative percentages
 - **Trend charts**: Sentiment changes over time
 - **Platform breakdown**: Twitter, Reddit, YouTube statistics
 - **Top posts**: Highest confidence posts by sentiment
 - **Auto-refresh**: Updates every 30 seconds
 
+### Keyword-Based Analytics
+
+Each tracked keyword gets its own analytics card showing:
+- Sentiment distribution (positive/neutral/negative %)
+- Total posts collected for that keyword
+- Visual progress bars for easy comparison
+- Click any card to filter the entire dashboard to that keyword
+
+This makes it easy to:
+- Compare sentiment across different topics
+- Track individual keyword performance
+- Identify which topics generate more engagement
+- Spot trends in specific areas of interest
+
 ### Dashboard Controls
 
 - **Refresh Button**: Manual data refresh
+- **Manage Keywords**: Add, remove, or update tracked keywords in real-time
+- **Run Fetch Now**: Trigger immediate data collection with current keywords
+- **Keyword Cards**: Click any card to filter dashboard by that keyword
+- **Filter by Keyword**: Dropdown to manually select keyword filter
 - **Time Period Selector**: Choose trend analysis period
+- **Date Range Filter**: Filter data by custom start/end dates
 - **Platform Filters**: View specific platform data
 
 ## 🛠️ Development
@@ -219,15 +307,30 @@ python tests/create_test_data.py
 
 - `GET /api/sentiment/summary`: Current sentiment statistics
 - `GET /api/sentiment/trends`: Historical trend data
+- `GET /api/sentiment/by-keywords`: Sentiment statistics grouped by keyword
 - `GET /api/posts/top`: Top posts by sentiment
 - `GET /api/posts/recent`: Recent posts
 - `GET /api/stats/overview`: System overview
+- `GET /api/config/keywords`: Get active keywords
+- `POST /api/config/keywords`: Update active keywords (body: `{"keywords": ["word1", "word2"]}`)
+- `POST /api/pipeline/run_once`: Trigger immediate data collection cycle
 
 ### Query Parameters
 
+All data retrieval endpoints support the following filters:
+
 - `platform`: Filter by platform (twitter, reddit, youtube)
+- `keyword`: Filter by specific keyword (e.g., `?keyword=AI`)
 - `hours`: Time range in hours (default: 24)
+- `days`: Time range in days for trends (default: 7)
+- `start_date`: Start datetime in ISO format (e.g., `2025-11-01T00:00:00Z`)
+- `end_date`: End datetime in ISO format (e.g., `2025-11-24T23:59:59Z`)
 - `limit`: Number of results (default: 10)
+
+**Example**: Get sentiment summary for "AI" keyword from Twitter in the last 48 hours:
+```
+GET /api/sentiment/summary?keyword=AI&platform=twitter&hours=48
+```
 
 ## 🚨 Troubleshooting
 

@@ -1,14 +1,14 @@
 import threading
 import time
 import logging
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import List, Dict
 from concurrent.futures import ThreadPoolExecutor
 
 from src.data_collection.twitter_collector import TwitterCollector
 from src.data_collection.reddit_collector import RedditCollector
 from src.data_collection.youtube_collector import YouTubeCollector
-from src.sentiment_analysis.sentiment_analyzer import SentimentAnalyzer
+from src.model.sentiment_analysis.sentiment_analyzer import SentimentAnalyzer
 from src.database.mongodb_client import MongoDBClient
 from .data_processor import DataProcessor
 from config.settings import Config
@@ -35,7 +35,7 @@ class RealTimePipeline:
             return self.keywords_source()
         return self.db_client.get_active_keywords()
 
-    def collect_data_from_all_sources(self) -> List[Dict]:
+    def collect_data_from_all_sources(self, start_time: datetime = None, end_time: datetime = None) -> List[Dict]:
         """Collect data from all social media sources in parallel"""
         all_posts = []
 
@@ -63,6 +63,7 @@ class RealTimePipeline:
             # Collect results
             try:
                 twitter_posts = twitter_future.result(timeout=30)
+                twitter_posts = self._filter_posts_by_timeframe(twitter_posts, start_time, end_time)
                 all_posts.extend(twitter_posts)
                 logging.info(f"Collected {len(twitter_posts)} Twitter posts")
             except Exception as e:
@@ -70,6 +71,7 @@ class RealTimePipeline:
 
             try:
                 reddit_posts = reddit_future.result(timeout=30)
+                reddit_posts = self._filter_posts_by_timeframe(reddit_posts, start_time, end_time)
                 all_posts.extend(reddit_posts)
                 logging.info(f"Collected {len(reddit_posts)} Reddit posts")
             except Exception as e:
@@ -77,12 +79,57 @@ class RealTimePipeline:
 
             try:
                 youtube_videos = youtube_future.result(timeout=30)
+                youtube_videos = self._filter_posts_by_timeframe(youtube_videos, start_time, end_time)
                 all_posts.extend(youtube_videos)
                 logging.info(f"Collected {len(youtube_videos)} YouTube videos")
             except Exception as e:
                 logging.error(f"Error collecting YouTube data: {e}")
 
         return all_posts
+
+    def _filter_posts_by_timeframe(self, posts: List[Dict], start_time: datetime, end_time: datetime) -> List[Dict]:
+        if not posts or (start_time is None and end_time is None):
+            return posts or []
+
+        filtered = []
+        for post in posts:
+            created_at = self._extract_timestamp(post)
+
+            if created_at is None:
+                filtered.append(post)
+                continue
+
+            if start_time and created_at < start_time:
+                continue
+            if end_time and created_at > end_time:
+                continue
+
+            filtered.append(post)
+
+        return filtered
+
+    @staticmethod
+    def _extract_timestamp(post: Dict) -> datetime:
+        candidate = post.get('created_at') or post.get('collected_at') or post.get('published_at')
+
+        if candidate is None:
+            return None
+
+        if isinstance(candidate, datetime):
+            if candidate.tzinfo is None:
+                return candidate.replace(tzinfo=timezone.utc)
+            return candidate.astimezone(timezone.utc)
+
+        if isinstance(candidate, str):
+            try:
+                dt = datetime.fromisoformat(candidate)
+                if dt.tzinfo is None:
+                    return dt.replace(tzinfo=timezone.utc)
+                return dt.astimezone(timezone.utc)
+            except ValueError:
+                return None
+
+        return None
 
     def process_sentiment_batch(self, posts: List[Dict]) -> List[Dict]:
         """Process sentiment analysis for a batch of posts"""
@@ -104,6 +151,7 @@ class RealTimePipeline:
                         'text': text,
                         'created_at': post.get('created_at'),
                         'sentiment': sentiment,
+                        'keywords': post.get('keywords', []),  # Preserve keywords from raw post
                         'processed_at': datetime.now(),
                         'metadata': {
                             'author_id': post.get('author_id') or post.get('author'),
@@ -135,17 +183,46 @@ class RealTimePipeline:
         except Exception as e:
             logging.error(f"Error storing results: {e}")
 
-    def run_single_cycle(self):
-        """Run one cycle of the pipeline"""
+    def run_single_cycle(self, keywords=None, duration_days=None):
+        """Run one cycle of the pipeline and return summary statistics."""
+        original_keywords = self.keywords
+        stats = {'positive': 0, 'neutral': 0, 'negative': 0, 'total': 0}
+        raw_posts_count = 0
+        sentiment_results_count = 0
+
         try:
+            # Use provided keywords or fall back to config
+            if keywords:
+                current_keywords = keywords
+                logging.info(f"Using custom keywords: {current_keywords}")
+            else:
+                current_keywords = self.keywords
+
+            # Temporarily override keywords for this cycle
+            self.keywords = current_keywords
+
             logging.info("Starting data collection cycle...")
 
-            # Collect data from all sources
-            raw_posts = self.collect_data_from_all_sources()
+            window_end = datetime.now(timezone.utc)
+            window_start = None
+            if duration_days and duration_days > 0:
+                window_start = window_end - timedelta(days=duration_days)
+                logging.info(
+                    "Restricting data collection to window %s - %s",
+                    window_start.isoformat(),
+                    window_end.isoformat()
+                )
+            else:
+                logging.info("No duration window provided; collecting latest available data")
+
+            # Collect data from all sources (collectors will use self.keywords)
+            raw_posts = self.collect_data_from_all_sources(start_time=window_start, end_time=window_end)
+            raw_posts_count = len(raw_posts) if raw_posts else 0
 
             if raw_posts:
                 # Process sentiment analysis
                 sentiment_results = self.process_sentiment_batch(raw_posts)
+                sentiment_results_count = len(sentiment_results) if sentiment_results else 0
 
                 # Store results in database
                 self.store_results(raw_posts, sentiment_results)
@@ -157,15 +234,35 @@ class RealTimePipeline:
             else:
                 logging.info("No new posts collected in this cycle")
 
+            return {
+                'stats': stats,
+                'raw_posts_count': raw_posts_count,
+                'sentiment_results_count': sentiment_results_count,
+                'time_window': {
+                    'start': window_start,
+                    'end': window_end
+                }
+            }
+
         except Exception as e:
             logging.error(f"Error in pipeline cycle: {e}")
+            raise
 
-    def run_single_cycle_once(self):
-        """Thread-safe way to run a single cycle ONCE on demand."""
+        finally:
+            # Restore original keywords
+            self.keywords = original_keywords
+
+    def run_single_cycle_once(self, keywords=None, duration_days=None):
+        """Thread-safe way to run a single cycle ONCE on demand.
+        
+        Args:
+            keywords: Optional list of keywords to analyze
+            duration_days: Optional number of days to look back
+        """
         with self._lock:
             try:
-                self.run_single_cycle()
-                return {"status": "success"}
+                cycle_result = self.run_single_cycle(keywords=keywords, duration_days=duration_days)
+                return {"status": "success", **(cycle_result or {})}
             except Exception as e:
                 return {"status": "error", "message": str(e)}
 
