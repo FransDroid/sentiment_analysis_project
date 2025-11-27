@@ -328,7 +328,13 @@ async function fetchTopPosts(sentiment) {
 
 async function fetchOverviewStats() {
     try {
-        const response = await fetch('/api/stats/overview');
+        let url = '/api/stats/overview';
+        const windowParams = buildRunWindowParams();
+        if (windowParams) {
+            url += '?' + windowParams;
+        }
+        
+        const response = await fetch(url);
         const result = await response.json();
 
         if (result.success) {
@@ -658,6 +664,13 @@ window.addEventListener('resize', function() {
 function buildRunWindowParams() {
     const params = new URLSearchParams();
 
+    // Prioritize run_id if available
+    if (currentRunContext && currentRunContext.runId) {
+        params.append('run_id', currentRunContext.runId);
+        return params.toString();
+    }
+
+    // Fallback to time window filtering
     if (currentRunContext && currentRunContext.windowStart) {
         params.append('start_date', currentRunContext.windowStart);
     }

@@ -59,11 +59,13 @@ class MongoDBClient:
         """Set up database indexes for better performance"""
         try:
             # Raw posts collection indexes
+            self.db.raw_posts.create_index([("run_id", ASCENDING), ("created_at", DESCENDING)])
             self.db.raw_posts.create_index([("platform", ASCENDING), ("created_at", DESCENDING)])
             self.db.raw_posts.create_index([("keywords", ASCENDING)])
             self.db.raw_posts.create_index([("collected_at", DESCENDING)])
 
             # Sentiment results collection indexes
+            self.db.sentiment_results.create_index([("run_id", ASCENDING), ("created_at", DESCENDING)])
             self.db.sentiment_results.create_index([("platform", ASCENDING), ("created_at", DESCENDING)])
             self.db.sentiment_results.create_index([("sentiment.label", ASCENDING)])
             self.db.sentiment_results.create_index([("processed_at", DESCENDING)])
@@ -77,11 +79,21 @@ class MongoDBClient:
         except Exception as e:
             logging.error(f"Error creating indexes: {e}")
 
-    def insert_raw_posts(self, posts: List[Dict]) -> List:
-        """Insert raw social media posts"""
+    def insert_raw_posts(self, posts: List[Dict], run_id: Optional[str] = None) -> List:
+        """Insert raw social media posts
+        
+        Args:
+            posts: List of post dictionaries to insert
+            run_id: Optional run ID to associate posts with a specific analysis run
+        """
         try:
             if posts:
-                normalized_posts = [self._normalize_document_dates(post.copy()) for post in posts]
+                normalized_posts = []
+                for post in posts:
+                    post_copy = post.copy()
+                    if run_id:
+                        post_copy['run_id'] = run_id
+                    normalized_posts.append(self._normalize_document_dates(post_copy))
                 result = self.db.raw_posts.insert_many(normalized_posts)
                 logging.info(f"Inserted {len(result.inserted_ids)} raw posts")
                 return result.inserted_ids
@@ -89,13 +101,20 @@ class MongoDBClient:
             logging.error(f"Error inserting raw posts: {e}")
         return []
 
-    def insert_sentiment_results(self, results: List[Dict]) -> List:
-        """Insert sentiment analysis results"""
+    def insert_sentiment_results(self, results: List[Dict], run_id: Optional[str] = None) -> List:
+        """Insert sentiment analysis results
+        
+        Args:
+            results: List of sentiment result dictionaries to insert
+            run_id: Optional run ID to associate results with a specific analysis run
+        """
         try:
             if results:
-                # Add processing timestamp
+                # Add processing timestamp and run_id
                 for result in results:
                     result['processed_at'] = datetime.now(timezone.utc)
+                    if run_id:
+                        result['run_id'] = run_id
                     self._normalize_document_dates(result)
 
                 result = self.db.sentiment_results.insert_many(results)
@@ -164,7 +183,8 @@ class MongoDBClient:
             return None
 
     def get_recent_posts(self, platform: Optional[str] = None, hours: int = 24, limit: int = 1000,
-                         start_dt: Optional[datetime] = None, end_dt: Optional[datetime] = None) -> List[Dict]:
+                         start_dt: Optional[datetime] = None, end_dt: Optional[datetime] = None,
+                         run_id: Optional[str] = None) -> List[Dict]:
         """Get recent posts from the database
         
         Args:
@@ -173,10 +193,13 @@ class MongoDBClient:
             limit: Maximum number of posts to return
             start_dt: Start datetime for filtering (optional, overrides hours)
             end_dt: End datetime for filtering (optional, overrides hours)
+            run_id: Filter by run ID (optional, takes precedence over time-based filtering)
         """
         try:
             query = {}
-            if platform:
+            if run_id:
+                query['run_id'] = run_id
+            elif platform:
                 query['platform'] = platform
 
             # Use explicit date range if provided, otherwise use hours
@@ -203,7 +226,7 @@ class MongoDBClient:
 
     def get_sentiment_summary(self, platform: Optional[str] = None, hours: int = 24,
                               start_dt: Optional[datetime] = None, end_dt: Optional[datetime] = None,
-                              keyword: Optional[str] = None) -> Dict:
+                              keyword: Optional[str] = None, run_id: Optional[str] = None) -> Dict:
         """Get sentiment summary statistics
         
         Args:
@@ -212,10 +235,13 @@ class MongoDBClient:
             start_dt: Start datetime for filtering (optional, overrides hours)
             end_dt: End datetime for filtering (optional, overrides hours)
             keyword: Filter by keyword (optional)
+            run_id: Filter by run ID (optional, takes precedence over time-based filtering)
         """
         try:
             match_stage = {}
-            if platform:
+            if run_id:
+                match_stage['run_id'] = run_id
+            elif platform:
                 match_stage['platform'] = platform
             
             if keyword:
@@ -261,7 +287,7 @@ class MongoDBClient:
 
     def get_trend_data(self, platform: Optional[str] = None, days: int = 7,
                        start_dt: Optional[datetime] = None, end_dt: Optional[datetime] = None,
-                       keyword: Optional[str] = None) -> List[Dict]:
+                       keyword: Optional[str] = None, run_id: Optional[str] = None) -> List[Dict]:
         """Get sentiment trend data over time
         
         Args:
@@ -270,10 +296,13 @@ class MongoDBClient:
             start_dt: Start datetime for filtering (optional, overrides days)
             end_dt: End datetime for filtering (optional, overrides days)
             keyword: Filter by keyword (optional)
+            run_id: Filter by run ID (optional, takes precedence over time-based filtering)
         """
         try:
             match_stage = {}
-            if platform:
+            if run_id:
+                match_stage['run_id'] = run_id
+            elif platform:
                 match_stage['platform'] = platform
             
             if keyword:
@@ -314,7 +343,7 @@ class MongoDBClient:
 
     def get_top_posts(self, sentiment: str, platform: Optional[str] = None, limit: int = 10,
                       start_dt: Optional[datetime] = None, end_dt: Optional[datetime] = None,
-                      keyword: Optional[str] = None) -> List[Dict]:
+                      keyword: Optional[str] = None, run_id: Optional[str] = None) -> List[Dict]:
         """Get top posts by sentiment
         
         Args:
@@ -324,10 +353,13 @@ class MongoDBClient:
             start_dt: Start datetime for filtering (optional)
             end_dt: End datetime for filtering (optional)
             keyword: Filter by keyword (optional)
+            run_id: Filter by run ID (optional, takes precedence over time-based filtering)
         """
         try:
             query = {'sentiment.label': sentiment}
-            if platform:
+            if run_id:
+                query['run_id'] = run_id
+            elif platform:
                 query['platform'] = platform
             
             if keyword:
@@ -352,22 +384,6 @@ class MongoDBClient:
             logging.error(f"Error getting top posts: {e}")
             return []
 
-    def cleanup_old_data(self, days: int = 30):
-        """Remove old data to save storage space"""
-        try:
-            cutoff_date = datetime.now() - timedelta(days=days)
-
-            # Remove old raw posts
-            raw_result = self.db.raw_posts.delete_many({'collected_at': {'$lt': cutoff_date}})
-            logging.info(f"Deleted {raw_result.deleted_count} old raw posts")
-
-            # Remove old sentiment results
-            sentiment_result = self.db.sentiment_results.delete_many({'processed_at': {'$lt': cutoff_date}})
-            logging.info(f"Deleted {sentiment_result.deleted_count} old sentiment results")
-
-        except Exception as e:
-            logging.error(f"Error cleaning up old data: {e}")
-
     def close_connection(self):
         """Close database connection"""
         if self.client:
@@ -386,13 +402,15 @@ class MongoDBClient:
 
     def get_sentiment_by_keywords(self, hours: int = 24, 
                                    start_dt: Optional[datetime] = None,
-                                   end_dt: Optional[datetime] = None) -> List[Dict]:
+                                   end_dt: Optional[datetime] = None,
+                                   run_id: Optional[str] = None) -> List[Dict]:
         """Get sentiment statistics grouped by keyword
         
         Args:
             hours: Number of hours to look back (used if start_dt/end_dt not provided)
             start_dt: Start datetime for filtering (optional)
             end_dt: End datetime for filtering (optional)
+            run_id: Filter by run ID (optional, takes precedence over time-based filtering)
             
         Returns:
             List of dicts with keyword, sentiment breakdown, and post count
@@ -410,6 +428,8 @@ class MongoDBClient:
         try:
             # Build match stage for date filtering
             match_stage = {}
+            if run_id:
+                match_stage['run_id'] = run_id
             
             if start_dt or end_dt:
                 date_filter = {}

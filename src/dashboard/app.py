@@ -48,6 +48,7 @@ def get_sentiment_summary():
     start_date_str = request.args.get('start_date')
     end_date_str = request.args.get('end_date')
     keyword = request.args.get('keyword')
+    run_id = request.args.get('run_id')
 
     try:
         # Parse date parameters if provided
@@ -68,7 +69,8 @@ def get_sentiment_summary():
             hours=hours,
             start_dt=start_dt,
             end_dt=end_dt,
-            keyword=keyword
+            keyword=keyword,
+            run_id=run_id
         )
         return jsonify({
             'success': True,
@@ -96,6 +98,7 @@ def get_sentiment_trends():
     start_date_str = request.args.get('start_date')
     end_date_str = request.args.get('end_date')
     keyword = request.args.get('keyword')
+    run_id = request.args.get('run_id')
 
     try:
         # Parse date parameters if provided
@@ -116,7 +119,8 @@ def get_sentiment_trends():
             days=days,
             start_dt=start_dt,
             end_dt=end_dt,
-            keyword=keyword
+            keyword=keyword,
+            run_id=run_id
         )
 
         # Format data for frontend
@@ -156,6 +160,7 @@ def get_top_posts():
     start_date_str = request.args.get('start_date')
     end_date_str = request.args.get('end_date')
     keyword = request.args.get('keyword')
+    run_id = request.args.get('run_id')
 
     try:
         # Parse date parameters if provided
@@ -177,7 +182,8 @@ def get_top_posts():
             limit=limit,
             start_dt=start_dt,
             end_dt=end_dt,
-            keyword=keyword
+            keyword=keyword,
+            run_id=run_id
         )
 
         # Clean up posts for frontend
@@ -282,13 +288,14 @@ def get_recent_posts():
 def get_overview_stats():
     """Get overview statistics"""
     keyword = request.args.get('keyword')
+    run_id = request.args.get('run_id')
     
     try:
         # Get stats for last 24 hours
-        twitter_summary = db_client.get_sentiment_summary(platform='twitter', hours=24, keyword=keyword)
-        reddit_summary = db_client.get_sentiment_summary(platform='reddit', hours=24, keyword=keyword)
-        youtube_summary = db_client.get_sentiment_summary(platform='youtube', hours=24, keyword=keyword)
-        overall_summary = db_client.get_sentiment_summary(hours=24, keyword=keyword)
+        twitter_summary = db_client.get_sentiment_summary(platform='twitter', hours=24, keyword=keyword, run_id=run_id)
+        reddit_summary = db_client.get_sentiment_summary(platform='reddit', hours=24, keyword=keyword, run_id=run_id)
+        youtube_summary = db_client.get_sentiment_summary(platform='youtube', hours=24, keyword=keyword, run_id=run_id)
+        overall_summary = db_client.get_sentiment_summary(hours=24, keyword=keyword, run_id=run_id)
 
         stats = {
             'overall': overall_summary,
@@ -318,6 +325,7 @@ def get_sentiment_by_keywords():
         hours = int(request.args.get('hours', 24))
         start_date_str = request.args.get('start_date')
         end_date_str = request.args.get('end_date')
+        run_id = request.args.get('run_id')
         
         # Parse date parameters if provided
         start_dt = None
@@ -335,7 +343,8 @@ def get_sentiment_by_keywords():
         keyword_data = db_client.get_sentiment_by_keywords(
             hours=hours,
             start_dt=start_dt,
-            end_dt=end_dt
+            end_dt=end_dt,
+            run_id=run_id
         )
         
         return jsonify({
@@ -426,7 +435,7 @@ def run_once():
 
                 # Create pipeline and run with parameters
                 pipeline = RealTimePipeline()
-                result = pipeline.run_single_cycle_once(keywords=keywords, duration_days=duration_days)
+                result = pipeline.run_single_cycle_once(keywords=keywords, duration_days=duration_days, run_id=run_id)
                 stats = result.get('stats', {}) if isinstance(result, dict) else {}
                 raw_posts_count = result.get('raw_posts_count', 0) if isinstance(result, dict) else 0
                 sentiment_results_count = result.get('sentiment_results_count', 0) if isinstance(result, dict) else 0

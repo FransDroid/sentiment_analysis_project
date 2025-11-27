@@ -12,35 +12,49 @@ class RedditCollector:
             user_agent=Config.REDDIT_USER_AGENT
         )
 
-    def collect_posts(self, subreddits: List[str], keywords: List[str], limit: int = 100) -> List[Dict]:
+    def collect_posts(self, subreddits: List[str], keywords: List[str], limit: int = 500) -> List[Dict]:
         """Collect Reddit posts from specified subreddits"""
         posts_data = []
+        seen_ids = set()  # Prevent duplicates
 
         try:
             for subreddit_name in subreddits:
-                subreddit = self.reddit.subreddit(subreddit_name)
+                try:
+                    subreddit = self.reddit.subreddit(subreddit_name)
 
-                # Search for posts with keywords
-                for keyword in keywords:
-                    search_results = subreddit.search(keyword, limit=limit//len(keywords))
+                    # Search for posts with keywords
+                    for keyword in keywords:
+                        # Calculate limit per keyword to distribute evenly
+                        per_keyword_limit = max(limit // (len(subreddits) * len(keywords)), 50)
+                        search_results = subreddit.search(keyword, limit=per_keyword_limit, time_filter='all')
 
-                    for submission in search_results:
-                        post_data = {
-                            'id': submission.id,
-                            'title': submission.title,
-                            'text': submission.selftext,
-                            'created_at': datetime.fromtimestamp(submission.created_utc),
-                            'author': str(submission.author) if submission.author else '[deleted]',
-                            'platform': 'reddit',
-                            'subreddit': subreddit_name,
-                            'upvotes': submission.ups,
-                            'downvotes': submission.downs,
-                            'score': submission.score,
-                            'num_comments': submission.num_comments,
-                            'collected_at': datetime.now(),
-                            'keywords': keywords
-                        }
-                        posts_data.append(post_data)
+                        for submission in search_results:
+                            # Skip duplicates
+                            if submission.id in seen_ids:
+                                continue
+                            seen_ids.add(submission.id)
+                            
+                            post_data = {
+                                'id': submission.id,
+                                'title': submission.title,
+                                'text': submission.selftext,
+                                'created_at': datetime.fromtimestamp(submission.created_utc),
+                                'author': str(submission.author) if submission.author else '[deleted]',
+                                'platform': 'reddit',
+                                'subreddit': subreddit_name,
+                                'upvotes': submission.ups,
+                                'downvotes': submission.downs,
+                                'score': submission.score,
+                                'num_comments': submission.num_comments,
+                                'collected_at': datetime.now(),
+                                'keywords': keywords
+                            }
+                            posts_data.append(post_data)
+                except Exception as sub_error:
+                    logging.error(f"Error collecting from subreddit {subreddit_name}: {sub_error}")
+                    continue
+
+            logging.info(f"Collected {len(posts_data)} Reddit posts from {len(subreddits)} subreddits")
 
         except Exception as e:
             logging.error(f"Error collecting Reddit posts: {e}")
