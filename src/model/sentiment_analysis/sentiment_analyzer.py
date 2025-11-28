@@ -14,7 +14,7 @@ try:
     import torch
     import torch.nn.functional as F
     from transformers import AutoModelForSequenceClassification, AutoTokenizer
-except ImportError:  # pragma: no cover - optional dependency
+except ImportError:
     torch = None
     F = None
     AutoModelForSequenceClassification = None

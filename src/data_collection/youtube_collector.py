@@ -8,32 +8,46 @@ class YouTubeCollector:
     def __init__(self):
         self.youtube = build('youtube', 'v3', developerKey=Config.YOUTUBE_API_KEY)
 
-    def search_videos(self, keywords: List[str], max_results: int = 50) -> List[Dict]:
-        """Search for YouTube videos based on keywords"""
+    def search_videos(self, keywords: List[str], max_results: int = 200) -> List[Dict]:
+        """Search for YouTube videos based on keywords with pagination"""
         videos_data = []
 
         try:
             query = " OR ".join(keywords)
-            search_response = self.youtube.search().list(
-                q=query,
-                part='id,snippet',
-                maxResults=max_results,
-                type='video',
-                order='relevance'
-            ).execute()
+            results_per_page = min(50, max_results)  # YouTube API max is 50 per request
+            next_page_token = None
+            collected = 0
 
-            for item in search_response['items']:
-                video_data = {
-                    'id': item['id']['videoId'],
-                    'title': item['snippet']['title'],
-                    'description': item['snippet']['description'],
-                    'channel': item['snippet']['channelTitle'],
-                    'published_at': datetime.fromisoformat(item['snippet']['publishedAt'].replace('Z', '+00:00')),
-                    'platform': 'youtube',
-                    'collected_at': datetime.now(),
-                    'keywords': keywords
-                }
-                videos_data.append(video_data)
+            while collected < max_results:
+                search_response = self.youtube.search().list(
+                    q=query,
+                    part='id,snippet',
+                    maxResults=results_per_page,
+                    type='video',
+                    order='date',  # Changed to 'date' to get more recent videos
+                    pageToken=next_page_token
+                ).execute()
+
+                for item in search_response['items']:
+                    video_data = {
+                        'id': item['id']['videoId'],
+                        'title': item['snippet']['title'],
+                        'description': item['snippet']['description'],
+                        'channel': item['snippet']['channelTitle'],
+                        'published_at': datetime.fromisoformat(item['snippet']['publishedAt'].replace('Z', '+00:00')),
+                        'platform': 'youtube',
+                        'collected_at': datetime.now(),
+                        'keywords': keywords
+                    }
+                    videos_data.append(video_data)
+                    collected += 1
+
+                # Check if there are more pages
+                next_page_token = search_response.get('nextPageToken')
+                if not next_page_token or collected >= max_results:
+                    break
+
+            logging.info(f"Collected {len(videos_data)} YouTube videos")
 
         except Exception as e:
             logging.error(f"Error searching YouTube videos: {e}")

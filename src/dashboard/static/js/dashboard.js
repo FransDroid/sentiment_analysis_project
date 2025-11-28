@@ -75,7 +75,7 @@ function populateRunDropdown(selector, runs, previousValue) {
 
     const placeholder = document.createElement('option');
     placeholder.value = '';
-    placeholder.textContent = runs.length ? 'Select a run' : 'No runs available';
+    placeholder.textContent = runs.length ? 'All data (no filter)' : 'No runs available';
     selector.appendChild(placeholder);
 
     runs.forEach(run => {
@@ -89,8 +89,15 @@ function populateRunDropdown(selector, runs, previousValue) {
         selector.value = previousValue;
         handleRunSelection(previousValue, { useCached: true });
     } else if (runs.length) {
-        selector.value = runs[0].run_id;
-        handleRunSelection(runs[0].run_id, { useCached: true });
+        // Auto-select the most recent completed run
+        const completedRun = runs.find(run => run.status === 'completed');
+        if (completedRun) {
+            selector.value = completedRun.run_id;
+            handleRunSelection(completedRun.run_id, { useCached: true });
+        } else {
+            selector.value = '';
+            handleRunSelection('');
+        }
     } else {
         handleRunSelection('');
     }
@@ -328,7 +335,13 @@ async function fetchTopPosts(sentiment) {
 
 async function fetchOverviewStats() {
     try {
-        const response = await fetch('/api/stats/overview');
+        let url = '/api/stats/overview';
+        const windowParams = buildRunWindowParams();
+        if (windowParams) {
+            url += '?' + windowParams;
+        }
+        
+        const response = await fetch(url);
         const result = await response.json();
 
         if (result.success) {
@@ -658,6 +671,13 @@ window.addEventListener('resize', function() {
 function buildRunWindowParams() {
     const params = new URLSearchParams();
 
+    // Prioritize run_id if available
+    if (currentRunContext && currentRunContext.runId) {
+        params.append('run_id', currentRunContext.runId);
+        return params.toString();
+    }
+
+    // Fallback to time window filtering
     if (currentRunContext && currentRunContext.windowStart) {
         params.append('start_date', currentRunContext.windowStart);
     }
@@ -1071,12 +1091,20 @@ function startAnalysisPolling() {
             } else if (status === 'completed') {
                 clearInterval(analysisStatusInterval);
                 analysisStatusInterval = null;
+                const completedRunId = analysisJobId;
                 analysisJobId = null;
                 showAnalysisSuccess();
 
-                setTimeout(() => {
-                    refreshRunOptions({ preserveSelection: false });
-                    loadInitialData();
+                setTimeout(async () => {
+                    await refreshRunOptions({ preserveSelection: false });
+                    // Automatically select the completed run
+                    const selector = document.getElementById('run-selector');
+                    if (selector && completedRunId) {
+                        selector.value = completedRunId;
+                        await handleRunSelection(completedRunId);
+                    } else {
+                        loadInitialData();
+                    }
                     startAutoRefresh();
                 }, 1000);
             } else if (status === 'error') {

@@ -15,11 +15,11 @@ class TwitterCollector:
             Config.TWITTER_ACCESS_TOKEN_SECRET
         ))
 
-    def collect_tweets(self, keywords: List[str], max_results: int = 100) -> List[Dict]:
+    def collect_tweets(self, keywords: List[str], max_results: int = 500) -> List[Dict]:
         """Collect tweets for given keywords with rate limiting protection"""
         tweets_data = []
         max_retries = 3
-        backoff_time = 60  # Start with 1 minute backoff
+        backoff_time = 60
 
         for attempt in range(max_retries):
             try:
@@ -27,12 +27,12 @@ class TwitterCollector:
                 tweets = tweepy.Paginator(
                     self.client.search_recent_tweets,
                     query=query,
-                    max_results=min(max_results, 10),  # Limit to 10 per request to avoid rate limits
+                    max_results=10,
                     tweet_fields=['created_at', 'author_id', 'public_metrics', 'lang']
                 ).flatten(limit=max_results)
 
                 for tweet in tweets:
-                    if tweet.lang == 'en':  # Only English tweets
+                    if tweet.lang == 'en':
                         tweet_data = {
                             'id': tweet.id,
                             'text': tweet.text,
@@ -46,6 +46,7 @@ class TwitterCollector:
                         }
                         tweets_data.append(tweet_data)
 
+                logging.info(f"Collected {len(tweets_data)} tweets")
                 # If successful, break out of retry loop
                 break
 

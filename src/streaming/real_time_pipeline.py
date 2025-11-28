@@ -2,7 +2,7 @@ import threading
 import time
 import logging
 from datetime import datetime, timezone, timedelta
-from typing import List, Dict
+from typing import List, Dict, Optional
 from concurrent.futures import ThreadPoolExecutor
 
 from src.data_collection.twitter_collector import TwitterCollector
@@ -35,29 +35,47 @@ class RealTimePipeline:
             return self.keywords_source()
         return self.db_client.get_active_keywords()
 
+    def keywords_to_subreddits(self, keywords: List[str]) -> List[str]:
+        """Convert keywords to subreddit names and add general subreddits"""
+        subreddits = set()
+        
+        # Add general broad subreddits for wider coverage
+        general_subreddits = ['technology', 'news', 'todayilearned']
+        subreddits.update(general_subreddits)
+        
+        # Convert each keyword to a potential subreddit name
+        for keyword in keywords:
+            # Clean and format keyword as subreddit name (remove spaces, special chars)
+            cleaned = keyword.strip().replace(' ', '').replace('-', '').replace('_', '')
+            if cleaned:
+                subreddits.add(cleaned)
+        
+        logging.info(f"Using subreddits: {list(subreddits)}")
+        return list(subreddits)
+
     def collect_data_from_all_sources(self, start_time: datetime = None, end_time: datetime = None) -> List[Dict]:
         """Collect data from all social media sources in parallel"""
         all_posts = []
 
         with ThreadPoolExecutor(max_workers=3) as executor:
-            # Submit collection tasks
+            # Submit collection tasks with increased limits
             twitter_future = executor.submit(
                 self.twitter_collector.collect_tweets,
                 self.keywords,
-                max_results=50
+                max_results=500
             )
 
             reddit_future = executor.submit(
                 self.reddit_collector.collect_posts,
-                ['python', 'MachineLearning', 'artificial'],  # Example subreddits
+                self.keywords_to_subreddits(self.keywords),  # Dynamic subreddits from keywords
                 self.keywords,
-                limit=50
+                limit=500
             )
 
             youtube_future = executor.submit(
                 self.youtube_collector.search_videos,
                 self.keywords,
-                max_results=20
+                max_results=200
             )
 
             # Collect results
@@ -131,8 +149,13 @@ class RealTimePipeline:
 
         return None
 
-    def process_sentiment_batch(self, posts: List[Dict]) -> List[Dict]:
-        """Process sentiment analysis for a batch of posts"""
+    def process_sentiment_batch(self, posts: List[Dict], run_id: Optional[str] = None) -> List[Dict]:
+        """Process sentiment analysis for a batch of posts
+        
+        Args:
+            posts: List of posts to analyze
+            run_id: Optional run ID to associate results with a specific analysis run
+        """
         sentiment_results = []
 
         try:
@@ -160,6 +183,8 @@ class RealTimePipeline:
                             'score': post.get('score', 0)
                         }
                     }
+                    if run_id:
+                        result['run_id'] = run_id
                     sentiment_results.append(result)
 
             logging.info(f"Processed sentiment for {len(sentiment_results)} posts")
@@ -169,22 +194,34 @@ class RealTimePipeline:
 
         return sentiment_results
 
-    def store_results(self, raw_posts: List[Dict], sentiment_results: List[Dict]):
-        """Store results in MongoDB"""
+    def store_results(self, raw_posts: List[Dict], sentiment_results: List[Dict], run_id: Optional[str] = None):
+        """Store results in MongoDB
+        
+        Args:
+            raw_posts: List of raw posts to store
+            sentiment_results: List of sentiment analysis results to store
+            run_id: Optional run ID to associate data with a specific analysis run
+        """
         try:
             # Store raw posts
             if raw_posts:
-                self.db_client.insert_raw_posts(raw_posts)
+                self.db_client.insert_raw_posts(raw_posts, run_id=run_id)
 
             # Store sentiment results
             if sentiment_results:
-                self.db_client.insert_sentiment_results(sentiment_results)
+                self.db_client.insert_sentiment_results(sentiment_results, run_id=run_id)
 
         except Exception as e:
             logging.error(f"Error storing results: {e}")
 
-    def run_single_cycle(self, keywords=None, duration_days=None):
-        """Run one cycle of the pipeline and return summary statistics."""
+    def run_single_cycle(self, keywords=None, duration_days=None, run_id: Optional[str] = None):
+        """Run one cycle of the pipeline and return summary statistics.
+        
+        Args:
+            keywords: Optional list of keywords to analyze
+            duration_days: Optional number of days to look back
+            run_id: Optional run ID to associate collected data with a specific analysis run
+        """
         original_keywords = self.keywords
         stats = {'positive': 0, 'neutral': 0, 'negative': 0, 'total': 0}
         raw_posts_count = 0
@@ -221,11 +258,11 @@ class RealTimePipeline:
 
             if raw_posts:
                 # Process sentiment analysis
-                sentiment_results = self.process_sentiment_batch(raw_posts)
+                sentiment_results = self.process_sentiment_batch(raw_posts, run_id=run_id)
                 sentiment_results_count = len(sentiment_results) if sentiment_results else 0
 
                 # Store results in database
-                self.store_results(raw_posts, sentiment_results)
+                self.store_results(raw_posts, sentiment_results, run_id=run_id)
 
                 # Generate summary stats
                 stats = self.data_processor.aggregate_sentiment_stats(sentiment_results)
@@ -252,16 +289,17 @@ class RealTimePipeline:
             # Restore original keywords
             self.keywords = original_keywords
 
-    def run_single_cycle_once(self, keywords=None, duration_days=None):
+    def run_single_cycle_once(self, keywords=None, duration_days=None, run_id: Optional[str] = None):
         """Thread-safe way to run a single cycle ONCE on demand.
         
         Args:
             keywords: Optional list of keywords to analyze
             duration_days: Optional number of days to look back
+            run_id: Optional run ID to associate collected data with a specific analysis run
         """
         with self._lock:
             try:
-                cycle_result = self.run_single_cycle(keywords=keywords, duration_days=duration_days)
+                cycle_result = self.run_single_cycle(keywords=keywords, duration_days=duration_days, run_id=run_id)
                 return {"status": "success", **(cycle_result or {})}
             except Exception as e:
                 return {"status": "error", "message": str(e)}
