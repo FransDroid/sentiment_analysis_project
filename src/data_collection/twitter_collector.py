@@ -19,7 +19,7 @@ class TwitterCollector:
         """Collect tweets for given keywords with rate limiting protection"""
         tweets_data = []
         max_retries = 3
-        backoff_time = 60  # Start with 1 minute backoff
+        backoff_time = 60
 
         for attempt in range(max_retries):
             try:

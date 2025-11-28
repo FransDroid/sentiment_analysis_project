@@ -197,23 +197,29 @@ class MongoDBClient:
         """
         try:
             query = {}
+            
+            # Always apply platform filter if provided
+            if platform:
+                query['platform'] = platform
+            
+            # Apply run_id filter if provided
             if run_id:
                 query['run_id'] = run_id
-            elif platform:
-                query['platform'] = platform
-
-            # Use explicit date range if provided, otherwise use hours
-            if start_dt or end_dt:
-                date_filter = {}
-                if start_dt:
-                    date_filter['$gte'] = self._as_query_datetime(start_dt)
-                if end_dt:
-                    date_filter['$lt'] = self._as_query_datetime(end_dt)
-                query['created_at'] = date_filter
+                # When filtering by run_id, don't apply time filters
+                # as the run_id already defines the data scope
             else:
-                # Fallback to hours-based filtering
-                since = datetime.now(timezone.utc) - timedelta(hours=hours)
-                query['created_at'] = {'$gte': self._as_query_datetime(since)}
+                # Use explicit date range if provided, otherwise use hours
+                if start_dt or end_dt:
+                    date_filter = {}
+                    if start_dt:
+                        date_filter['$gte'] = self._as_query_datetime(start_dt)
+                    if end_dt:
+                        date_filter['$lt'] = self._as_query_datetime(end_dt)
+                    query['created_at'] = date_filter
+                else:
+                    # Fallback to hours-based filtering
+                    since = datetime.now(timezone.utc) - timedelta(hours=hours)
+                    query['created_at'] = {'$gte': self._as_query_datetime(since)}
 
             posts = list(self.db.raw_posts.find(query)
                         .sort('created_at', DESCENDING)
@@ -239,26 +245,32 @@ class MongoDBClient:
         """
         try:
             match_stage = {}
+            
+            # Always apply platform filter if provided
+            if platform:
+                match_stage['platform'] = platform
+            
+            # Apply run_id filter if provided
             if run_id:
                 match_stage['run_id'] = run_id
-            elif platform:
-                match_stage['platform'] = platform
+                # When filtering by run_id, don't apply time filters
+                # as the run_id already defines the data scope
+            else:
+                # Use explicit date range if provided, otherwise use hours
+                if start_dt or end_dt:
+                    date_filter = {}
+                    if start_dt:
+                        date_filter['$gte'] = self._as_query_datetime(start_dt)
+                    if end_dt:
+                        date_filter['$lt'] = self._as_query_datetime(end_dt)
+                    match_stage['created_at'] = date_filter
+                else:
+                    # Fallback to hours-based filtering
+                    since = datetime.now(timezone.utc) - timedelta(hours=hours)
+                    match_stage['created_at'] = {'$gte': self._as_query_datetime(since)}
             
             if keyword:
                 match_stage['keywords'] = keyword
-
-            # Use explicit date range if provided, otherwise use hours
-            if start_dt or end_dt:
-                date_filter = {}
-                if start_dt:
-                    date_filter['$gte'] = self._as_query_datetime(start_dt)
-                if end_dt:
-                    date_filter['$lt'] = self._as_query_datetime(end_dt)
-                match_stage['created_at'] = date_filter
-            else:
-                # Fallback to hours-based filtering
-                since = datetime.now(timezone.utc) - timedelta(hours=hours)
-                match_stage['created_at'] = {'$gte': self._as_query_datetime(since)}
 
             pipeline = [
                 {'$match': match_stage},
@@ -300,26 +312,32 @@ class MongoDBClient:
         """
         try:
             match_stage = {}
+            
+            # Always apply platform filter if provided
+            if platform:
+                match_stage['platform'] = platform
+            
+            # Apply run_id filter if provided
             if run_id:
                 match_stage['run_id'] = run_id
-            elif platform:
-                match_stage['platform'] = platform
+                # When filtering by run_id, don't apply time filters
+                # as the run_id already defines the data scope
+            else:
+                # Use explicit date range if provided, otherwise use days
+                if start_dt or end_dt:
+                    date_filter = {}
+                    if start_dt:
+                        date_filter['$gte'] = self._as_query_datetime(start_dt)
+                    if end_dt:
+                        date_filter['$lt'] = self._as_query_datetime(end_dt)
+                    match_stage['created_at'] = date_filter
+                else:
+                    # Fallback to days-based filtering
+                    since = datetime.now(timezone.utc) - timedelta(days=days)
+                    match_stage['created_at'] = {'$gte': self._as_query_datetime(since)}
             
             if keyword:
                 match_stage['keywords'] = keyword
-
-            # Use explicit date range if provided, otherwise use days
-            if start_dt or end_dt:
-                date_filter = {}
-                if start_dt:
-                    date_filter['$gte'] = self._as_query_datetime(start_dt)
-                if end_dt:
-                    date_filter['$lt'] = self._as_query_datetime(end_dt)
-                match_stage['created_at'] = date_filter
-            else:
-                # Fallback to days-based filtering
-                since = datetime.now(timezone.utc) - timedelta(days=days)
-                match_stage['created_at'] = {'$gte': self._as_query_datetime(since)}
 
             pipeline = [
                 {'$match': match_stage},
@@ -357,22 +375,28 @@ class MongoDBClient:
         """
         try:
             query = {'sentiment.label': sentiment}
+            
+            # Always apply platform filter if provided
+            if platform:
+                query['platform'] = platform
+            
+            # Apply run_id filter if provided
             if run_id:
                 query['run_id'] = run_id
-            elif platform:
-                query['platform'] = platform
+                # When filtering by run_id, don't apply time filters
+                # as the run_id already defines the data scope
+            else:
+                # Add date range filtering if provided
+                if start_dt or end_dt:
+                    date_filter = {}
+                    if start_dt:
+                        date_filter['$gte'] = self._as_query_datetime(start_dt)
+                    if end_dt:
+                        date_filter['$lt'] = self._as_query_datetime(end_dt)
+                    query['created_at'] = date_filter
             
             if keyword:
                 query['keywords'] = keyword
-
-            # Add date range filtering if provided
-            if start_dt or end_dt:
-                date_filter = {}
-                if start_dt:
-                    date_filter['$gte'] = self._as_query_datetime(start_dt)
-                if end_dt:
-                    date_filter['$lt'] = self._as_query_datetime(end_dt)
-                query['created_at'] = date_filter
 
             posts = list(self.db.sentiment_results.find(query)
                         .sort([('sentiment.confidence', DESCENDING), ('processed_at', DESCENDING)])
@@ -430,17 +454,19 @@ class MongoDBClient:
             match_stage = {}
             if run_id:
                 match_stage['run_id'] = run_id
-            
-            if start_dt or end_dt:
-                date_filter = {}
-                if start_dt:
-                    date_filter['$gte'] = self._as_query_datetime(start_dt)
-                if end_dt:
-                    date_filter['$lt'] = self._as_query_datetime(end_dt)
-                match_stage['created_at'] = date_filter
+                # When filtering by run_id, don't apply time filters
+                # as the run_id already defines the data scope
             else:
-                since = datetime.now(timezone.utc) - timedelta(hours=hours)
-                match_stage['created_at'] = {'$gte': self._as_query_datetime(since)}
+                if start_dt or end_dt:
+                    date_filter = {}
+                    if start_dt:
+                        date_filter['$gte'] = self._as_query_datetime(start_dt)
+                    if end_dt:
+                        date_filter['$lt'] = self._as_query_datetime(end_dt)
+                    match_stage['created_at'] = date_filter
+                else:
+                    since = datetime.now(timezone.utc) - timedelta(hours=hours)
+                    match_stage['created_at'] = {'$gte': self._as_query_datetime(since)}
             
             # Aggregation pipeline to unwind keywords and group by keyword + sentiment
             pipeline = [
